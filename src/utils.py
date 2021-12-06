@@ -1,5 +1,29 @@
 from numpy import array, isin, dot, arange
 
+def gen_dicts(array):
+    
+    ids = arange(len(array))
+    
+    id_to_array = dict(zip(ids, array))
+    array_to_id = dict(zip(array, ids))
+
+    return id_to_array, array_to_id
+
+
+def popular_items(data, N=5000):
+    """
+    выделение в данных N популярных товаров
+    """  
+    popularity = data.groupby('item_id')['quantity'].sum().reset_index()
+    popularity.rename(columns={'quantity': 'n_sold'}, inplace=True)
+    
+    top = popularity.sort_values('n_sold', ascending=False).head(N).item_id.tolist()
+    
+    data.loc[~data['item_id'].isin(top), 'item_id'] = 999999 
+    
+    return data
+
+
 def prefilter_items(data):
     # Уберем самые популярные товары (их и так купят)
     popularity = data.groupby('item_id')['user_id'].nunique().reset_index() / data['user_id'].nunique()
@@ -21,6 +45,9 @@ def prefilter_items(data):
     # Уберем слишком дорогие товарыs
     
     # ...
+
+  
+
 
 def postfilter_items(user_id, recommednations):
     pass
@@ -109,16 +136,13 @@ def get_similar_items_recommendation(model, data, c_ui, N=5):
     На выходе датафрейм, состоящий из двух колонок 'user_id' и 'similar_recommendation'
     """
     itemids = c_ui.columns.values
-    matrix_itemids = arange(len(itemids))
-    
-    id_to_itemid = dict(zip(matrix_itemids, itemids))
-    itemid_to_id = dict(zip(itemids, matrix_itemids))
+    id_to_itemid, itemid_to_id = gen_dicts(itemids)
 
     # формируем топ-N купленных товаров
     popularity = data.groupby(['user_id', 'item_id'])['quantity'].count().reset_index()
     popularity.sort_values('quantity', ascending=False, inplace=True)
     popularity = popularity[popularity['item_id'] != 999999]
-    popularity = popularity.groupby('user_id').head(N)
+    popularity = popularity.groupby('user_id').head(N+5)
     popularity.sort_values('user_id', ascending=False, inplace=True)
     
     def get_rec(model, x):
@@ -129,23 +153,33 @@ def get_similar_items_recommendation(model, data, c_ui, N=5):
     
     # находим один товар близкий (похожий) к каждому товару из топ-N
     popularity['similar_recommendation'] = popularity['item_id'].apply(lambda x: get_rec(model, x))
-    
+    popularity = popularity[popularity['similar_recommendation'] != 999999]
+    popularity = popularity.groupby('user_id').head(N)
     recommendation_similar_items = popularity.groupby('user_id')['similar_recommendation'].unique().reset_index()
+    
     recommendation_similar_items.columns=['user_id', 'similar_recommendation']
       
     return recommendation_similar_items
+
 
 def get_similar_users_recommendation(model, data, c_ui, N=5):
     """
     Рекомендуем те товары, которые купили N похожих пользователей
     На выходе датафрейм, состоящий из двух колонок 'user_id' и 'similar_recommendation'
     """
-    itemids = c_ui.columns.values
-    matrix_itemids = arange(len(itemids))
+#    itemids = c_ui.columns.values
+#    matrix_itemids = arange(len(itemids))
     
-    id_to_itemid = dict(zip(matrix_itemids, itemids))
-    itemid_to_id = dict(zip(itemids, matrix_itemids))
+#    id_to_itemid = dict(zip(matrix_itemids, itemids))
+#    itemid_to_id = dict(zip(itemids, matrix_itemids))
 
+    userids = c_ui.index.values
+    matrix_userids = arange(len(userids))
+    
+    id_to_userid = dict(zip(matrix_userids, userids))
+    userid_to_id = dict(zip(userids, matrix_userids))
+
+    similar_users = model.similar_users(userid_to_id[10], N=6)
     # формируем топ-N купленных товаров
     popularity = data.groupby(['user_id', 'item_id'])['quantity'].count().reset_index()
     popularity.sort_values('quantity', ascending=False, inplace=True)
