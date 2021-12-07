@@ -1,4 +1,3 @@
-#from numpy import array, isin, dot, arange
 from scipy.sparse import csr_matrix
 from .utils import gen_dicts
 
@@ -33,7 +32,8 @@ def get_similar_items_recommendation(model, data, c_ui, N=5):
       
     return recommendation_similar_items
 
-def get_similar_users_recommendation(model, data, c_ui, N=5):
+
+def get_similar_users_recommendation(user_model, item_model, data, c_ui, N=5):
     """
     Рекомендуем те товары, которые купили N похожих пользователей
     На выходе датафрейм, состоящий из двух колонок 'user_id' и 'similar_users_rec'
@@ -48,13 +48,13 @@ def get_similar_users_recommendation(model, data, c_ui, N=5):
     # находим N похожих пользователей
     def get_users(user, N=5):
         result = []
-        similar_users = model.similar_users(userid_to_id[user], N=N+1)[1:]
+        similar_users = user_model.similar_users(userid_to_id[user], N=N+1)[1:]
         for row in similar_users:
             result.append(row[0])
         return result
  
     # для каждого пользователя из списка пользователей рекомендуем 2 популярных товара, 
-    # потом выбираем уникальные товары и берем из них N штук 
+    # потом выбираем уникальные товары  
     def get_rec(users, model, N=2):
         res = []
         for user in users:
@@ -74,6 +74,7 @@ def get_similar_users_recommendation(model, data, c_ui, N=5):
     # берем всех уникальных пользователей из выбоки данных и для каждого рекомендуем N товаров
     result = data.groupby(['user_id'])['item_id'].count().reset_index()
     result['similar_users'] = result['user_id'].apply(lambda x: get_users(x))
-    result['similar_users_rec'] = result['similar_users'].apply(lambda x: get_rec(x, model)[:N])
+    result['similar_users_rec'] = result['similar_users'].apply(lambda x: get_rec(x, item_model)[:N])
     
     return result[['user_id', 'similar_users_rec']]
+
