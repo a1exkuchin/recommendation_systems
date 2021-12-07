@@ -1,5 +1,4 @@
 from numpy import array, isin, dot, arange
-from scipy.sparse import csr_matrix
 
 def gen_dicts(array):
     
@@ -44,6 +43,7 @@ def prefilter_items(data):
     # Уберем слишком дешевые товары (на них не заработаем). 1 покупка из рассылок стоит 60 руб. 
     
     # Уберем слишком дорогие товарыs
+    return data
     
 
 def postfilter_items(user_id, recommednations):
