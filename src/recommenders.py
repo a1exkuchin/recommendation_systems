@@ -48,7 +48,7 @@ class MainRecommender:
         user_item_matrix = pd.pivot_table(data,
                                           index='user_id', columns='item_id',
                                           values='quantity',  # Можно пробовать другие варианты
-                                          aggfunc='count',
+                                          aggfunc='mean',
                                           fill_value=0
                                           )
 
@@ -90,21 +90,12 @@ class MainRecommender:
         model = AlternatingLeastSquares(factors=n_factors,
                                         regularization=regularization,
                                         iterations=iterations,
-                                        num_threads=num_threads)
+                                        num_threads=num_threads, 
+                                        random_state=0, use_gpu=False)
         model.fit(csr_matrix(user_item_matrix).T.tocsr())
 
         return model
 
-    def _update_dict(self, user_id):
-        """Если появился новыю user / item, то нужно обновить словари"""
-
-        if user_id not in self.userid_to_id.keys():
-
-            max_id = max(list(self.userid_to_id.values()))
-            max_id += 1
-
-            self.userid_to_id.update({user_id: max_id})
-            self.id_to_userid.update({max_id: user_id})
 
     def _get_similar_item(self, item_id):
         """Находит товар, похожий на item_id"""
@@ -124,7 +115,6 @@ class MainRecommender:
     def _get_recommendations(self, user, model, N=5):
         """Рекомендации через стардартные библиотеки implicit"""
 
-        self._update_dict(user_id=user)
         res = [self.id_to_itemid[rec[0]] for rec in model.recommend(userid=self.userid_to_id[user],
                                         user_items=csr_matrix(self.user_item_matrix).tocsr(),
                                         N=N,
@@ -139,16 +129,24 @@ class MainRecommender:
 
     def get_als_recommendations(self, user, N=5):
         """Рекомендации через стардартные библиотеки implicit"""
-
-        self._update_dict(user_id=user)
-        return self._get_recommendations(user, model=self.model, N=N)
+        if user not in self.userid_to_id.keys(): 
+            res = list()
+            res = self._extend_with_top_popular(res, N=N)
+        else:
+            res = self._get_recommendations(user, model=self.model, N=N)
+        
+        return res
 
     def get_own_recommendations(self, user, N=5):
         """Рекомендуем товары среди тех, которые юзер уже купил"""
-
-        self._update_dict(user_id=user)
-        return self._get_recommendations(user, model=self.own_recommender, N=N)
-
+        if user not in self.userid_to_id.keys(): 
+            res = list()
+            res = self._extend_with_top_popular(res, N=N)
+        else:
+            res = self._get_recommendations(user, model=self.own_recommender, N=N)
+       
+        return res
+    
     def get_similar_items_recommendation(self, user, N=5):
         """Рекомендуем товары, похожие на топ-N купленных юзером товаров"""
 
@@ -162,19 +160,22 @@ class MainRecommender:
 
     def get_similar_users_recommendation(self, user, N=5):
         """Рекомендуем топ-N товаров, среди купленных похожими юзерами"""
-
-        res = []
-
-        # Находим топ-N похожих пользователей
-        similar_users = self.model.similar_users(self.userid_to_id[user], N=N+1)
-        similar_users = [rec[0] for rec in similar_users]
-        similar_users = similar_users[1:]   # удалим юзера из запроса
-
-        for user in similar_users:
-            userid = self.id_to_userid[user]
-            res.extend(self.get_own_recommendations(userid, N=1))
-
-        res = self._extend_with_top_popular(res, N=N)
-
-        assert len(res) == N, 'Количество рекомендаций != {}'.format(N)
+        if user not in self.userid_to_id.keys(): 
+            res = list()
+            res = self._extend_with_top_popular(res, N=N)
+        else:
+            res = []
+    
+            # Находим топ-N похожих пользователей
+            similar_users = self.model.similar_users(self.userid_to_id[user], N=N+1)
+            similar_users = [rec[0] for rec in similar_users]
+            similar_users = similar_users[1:]   # удалим юзера из запроса
+    
+            for user in similar_users:
+                userid = self.id_to_userid[user]
+                res.extend(self.get_own_recommendations(userid, N=1))
+    
+            res = self._extend_with_top_popular(res, N=N)
+    
+            assert len(res) == N, 'Количество рекомендаций != {}'.format(N)
         return res
