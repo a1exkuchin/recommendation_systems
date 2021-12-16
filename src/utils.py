@@ -49,6 +49,35 @@ def prefilter_items(data, take_n_popular=5000, item_features=None):
 
     return data
 
+def features_generation(data, target):
+    
+    df = data.groupby(['item_id', 'department'])['quantity'].sum().reset_index()
+    df = df.groupby('item_id')['quantity'].mean().reset_index()
+    df.columns = ['item_id', 'mean_item_count_by_dep']
+        
+    result = target.merge(df, on='item_id')
+    # средняя трата пользователя 
+    df = data.groupby(['user_id', 'basket_id'])['sales_value'].sum().reset_index()
+    df = df.groupby('user_id')['sales_value'].mean().reset_index()
+    df.columns = ['user_id', 'mean_sales']
+        
+    result = result.merge(df, on='user_id')
+    # среднее число покупок конкретной категории товара в неделю
+    df = data.groupby(['department', 'week_no'])['quantity'].sum().reset_index()
+    df = df.groupby('department')['quantity'].mean().reset_index()
+    df.columns = ['department', 'week_mean_count_by_dep']
+            
+    result = result.merge(df, on='department')
+    # среднее количество покупок пользователя в каждой категории товаров
+    df = data.groupby(['user_id', 'department'])['quantity'].sum().reset_index()
+    df = df.groupby('user_id')['quantity'].mean().reset_index()
+    df.columns = ['user_id', 'mean_count_by_dep']
+        
+    result = result.merge(df, on='user_id')
+    
+    return result
+
+
 
 def postfilter_items(user_id, recommednations):
     pass
